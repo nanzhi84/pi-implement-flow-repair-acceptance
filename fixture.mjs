@@ -14,16 +14,37 @@ if (mode === 'prepare') {
 } else if (mode === 'check') {
   execFileSync(process.execPath, ['--check', 'app.mjs'], { stdio: 'pipe' });
 } else if (mode === 'accept') {
-  const greeting = execFileSync(process.execPath, ['app.mjs', 'Ada'], { encoding: 'utf8' });
-  if (greeting !== 'Hello, Ada!\n') throw new Error('greeting contract failed');
+  const blankAssertions = [
+    ['blank-space-rejected', ' '],
+    ['blank-tab-rejected', '\t'],
+    ['blank-form-feed-rejected', '\f'],
+    ['blank-nbsp-rejected', '\u00a0'],
+    ['blank-em-space-rejected', '\u2003'],
+  ].map(([name, input]) => {
+    let passed = false;
+    try { execFileSync(process.execPath, ['app.mjs', input], { stdio: 'pipe' }); }
+    catch (error) { passed = error.status === 2 && error.stdout?.length === 0; }
+    return { name, passed };
+  });
+  let greeting;
+  try { greeting = execFileSync(process.execPath, ['app.mjs', 'Ada'], { encoding: 'utf8' }); }
+  catch { /* Record CLI failure in the greeting assertion below. */ }
   let rejected = false;
   try { execFileSync(process.execPath, ['app.mjs'], { stdio: 'pipe' }); }
   catch (error) { rejected = error.status === 2; }
-  if (!rejected) throw new Error('missing-name contract failed');
-  process.stdout.write(JSON.stringify({ passed: true, assertions: [
-    { name: 'greeting-for-name', passed: true },
-    { name: 'missing-name-rejected', passed: true },
-  ] }) + '\n');
+  const assertions = [
+    { name: 'greeting-for-name', passed: greeting === 'Hello, Ada!\n' },
+    { name: 'missing-name-rejected', passed: rejected },
+    ...blankAssertions,
+  ];
+  const passed = assertions.every(assertion => assertion.passed);
+  process.stdout.write(JSON.stringify(passed ? { passed: true, assertions } : {
+    schema: 'flow-command-failure-v1',
+    kind: 'behavior',
+    codeSha: process.env.FLOW_CODE_SHA,
+    assertions,
+  }) + '\n');
+  if (!passed) process.exitCode = 1;
 } else {
   throw new Error('Unsupported fixture phase');
 }
