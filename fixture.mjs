@@ -20,9 +20,14 @@ if (mode === 'prepare') {
   try { execFileSync(process.execPath, ['app.mjs'], { stdio: 'pipe' }); }
   catch (error) { rejected = error.status === 2; }
   if (!rejected) throw new Error('missing-name contract failed');
+  let reservedRejected = false;
+  try { execFileSync(process.execPath, ['app.mjs', 'Reserved'], { stdio: 'pipe' }); }
+  catch (error) { reservedRejected = error.status === 2 && error.stdout.length === 0; }
+  if (!reservedRejected) throw new Error('reserved-name contract failed');
   const assertions = [
     { name: 'greeting-for-name', passed: true },
     { name: 'missing-name-rejected', passed: true },
+    { name: 'reserved-name-rejected', passed: true },
     ...[["space"," "],["tab","\t"],["form-feed","\f"],["nbsp"," "],["em-space"," "]].map(([id, name]) => {
       let passed = false;
       try { execFileSync(process.execPath, ['app.mjs', name], { stdio: 'pipe' }); }
