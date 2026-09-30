@@ -14,16 +14,28 @@ if (mode === 'prepare') {
 } else if (mode === 'check') {
   execFileSync(process.execPath, ['--check', 'app.mjs'], { stdio: 'pipe' });
 } else if (mode === 'accept') {
-  const greeting = execFileSync(process.execPath, ['app.mjs', 'Ada'], { encoding: 'utf8' });
-  if (greeting !== 'Hello, Ada!\n') throw new Error('greeting contract failed');
+  let greetingPassed = false;
+  try {
+    const greeting = execFileSync(process.execPath, ['app.mjs', 'Ada'], { encoding: 'utf8' });
+    greetingPassed = greeting === 'Hello, Ada!\n';
+  } catch {}
   let rejected = false;
   try { execFileSync(process.execPath, ['app.mjs'], { stdio: 'pipe' }); }
   catch (error) { rejected = error.status === 2; }
-  if (!rejected) throw new Error('missing-name contract failed');
-  process.stdout.write(JSON.stringify({ passed: true, assertions: [
-    { name: 'greeting-for-name', passed: true },
-    { name: 'missing-name-rejected', passed: true },
-  ] }) + '\n');
+  const assertions = [
+    { name: 'greeting-for-name', passed: greetingPassed },
+    { name: 'missing-name-rejected', passed: rejected },
+    ...[["space"," "],["tab","\t"],["form-feed","\f"],["nbsp"," "],["em-space"," "]].map(([id, name]) => {
+      let passed = false;
+      try { execFileSync(process.execPath, ['app.mjs', name], { stdio: 'pipe' }); }
+      catch (error) { passed = error.status === 2 && error.stdout?.length === 0; }
+      return { name: 'blank-' + id + '-rejected', passed };
+    }),
+  ];
+  if (assertions.some(item => !item.passed)) {
+    process.stdout.write(JSON.stringify({ schema: 'flow-command-failure-v1', kind: 'behavior', codeSha: process.env.FLOW_CODE_SHA, assertions }));
+    process.exitCode = 1;
+  } else process.stdout.write(JSON.stringify({ passed: true, assertions }));
 } else {
   throw new Error('Unsupported fixture phase');
 }
