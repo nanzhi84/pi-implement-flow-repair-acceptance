@@ -24,11 +24,21 @@ if (mode === 'prepare') {
   try { execFileSync(process.execPath, ['app.mjs', 'Reserved'], { stdio: 'pipe' }); }
   catch (error) { reservedRejected = error.status === 2 && error.stdout.length === 0; }
   if (!reservedRejected) throw new Error('reserved-name contract failed');
-  process.stdout.write(JSON.stringify({ passed: true, assertions: [
+  const assertions = [
     { name: 'greeting-for-name', passed: true },
     { name: 'missing-name-rejected', passed: true },
     { name: 'reserved-name-rejected', passed: true },
-  ] }) + '\n');
+    ...[["space"," "],["tab","\t"],["form-feed","\f"],["nbsp"," "],["em-space"," "]].map(([id, name]) => {
+      let passed = false;
+      try { execFileSync(process.execPath, ['app.mjs', name], { stdio: 'pipe' }); }
+      catch (error) { passed = error.status === 2 && error.stdout.length === 0; }
+      return { name: 'blank-' + id + '-rejected', passed };
+    }),
+  ];
+  if (assertions.some(item => !item.passed)) {
+    process.stdout.write(JSON.stringify({ schema: 'flow-command-failure-v1', kind: 'behavior', codeSha: process.env.FLOW_CODE_SHA, assertions }));
+    process.exitCode = 1;
+  } else process.stdout.write(JSON.stringify({ passed: true, assertions }));
 } else {
   throw new Error('Unsupported fixture phase');
 }
